@@ -1,9 +1,8 @@
 package com.oreilly.demo.controllers;
 
 import com.oreilly.demo.json.Greeting;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 public class HelloRestController {
@@ -12,4 +11,11 @@ public class HelloRestController {
     public Greeting greet(@RequestParam(defaultValue = "World") String name) {
         return new Greeting("Hello, %s!".formatted(name));
     }
+
+    @PostMapping("/rest")
+    @ResponseStatus(HttpStatus.CREATED)
+    public Greeting greetPostBody(@RequestBody Greeting greeting){
+        return new Greeting("Hello, %s!".formatted(greeting.message())) ;
+    }
+
 }
