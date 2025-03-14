@@ -14,7 +14,7 @@ public class HelloRestController {
 
     @PostMapping("/rest")
     @ResponseStatus(HttpStatus.CREATED)
-    public Greeting greetPostBody(@RequestBody Greeting greeting){
+    public Greeting greetPostBody(@RequestBody Greetinging greeting){
         return new Greeting("Hello, %s!".formatted(greeting.message())) ;
     }
 
