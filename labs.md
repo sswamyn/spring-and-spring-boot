@@ -17,12 +17,14 @@ This document contains hands-on exercises for learning Spring Boot fundamentals,
 2. [Add a REST Controller](#add-a-rest-controller)
 3. [Building a REST Client](#building-a-rest-client)
 4. [HTTP Interfaces (Spring Boot 3+)](#http-interfaces-spring-boot-3)
-5. [Consuming External APIs](#consuming-external-apis)
-6. [Using the JDBC Template](#using-the-jdbc-template)
-7. [Using the JDBC Client (Spring Boot 3.2+)](#using-the-jdbc-client-spring-boot-32)
-8. [Using JPA entities and Spring Data JPA](#using-jpa-entities-and-spring-data-jpa)
-9. [Spring Profiles for Environment-Specific Configuration](#spring-profiles-for-environment-specific-configuration)
-10. [Optional: Aspect-Oriented Programming (AOP) with Spring](#optional-aspect-oriented-programming-aop-with-spring)
+5. [Basic REST API Consumption with RestClient](#basic-rest-api-consumption-with-restclient)
+6. [Configuration with @Value and Error Handling](#configuration-with-value-and-error-handling)
+7. [Reactive Programming with WebClient](#reactive-programming-with-webclient)
+8. [Using the JDBC Template](#using-the-jdbc-template)
+9. [Using the JDBC Client (Spring Boot 3.2+)](#using-the-jdbc-client-spring-boot-32)
+10. [Using JPA entities and Spring Data JPA](#using-jpa-entities-and-spring-data-jpa)
+11. [Spring Profiles for Environment-Specific Configuration](#spring-profiles-for-environment-specific-configuration)
+12. [Optional: Aspect-Oriented Programming (AOP) with Spring](#optional-aspect-oriented-programming-aop-with-spring)
 
 ## Creating a New Project
 
@@ -624,674 +626,636 @@ void getAstroResponseFromInterface(@Autowired AstroInterface astroInterface) {
 
 7. That test should pass. Note that for synchronous access, simply change the return type of the method inside the `getAstroResponse` method of `AstroInterface` to `AstroResponse` instead of the `Mono`. See the documentation for additional details.
 
-## Consuming External APIs
+## Basic REST API Consumption with RestClient
 
-This exercise demonstrates how to consume external RESTful APIs using both `RestClient` and `WebClient`. We'll use the JSON Placeholder API (https://jsonplaceholder.typicode.com/), a free testing service designed for prototyping and learning. Additionally, this exercise will demonstrate the `@Value` annotation for injecting configuration properties.
+This exercise introduces Spring Boot's modern `RestClient` for consuming external REST APIs. We'll use the JSON Placeholder API (https://jsonplaceholder.typicode.com/), a free testing service perfect for learning API consumption without authentication complexity.
 
 > [!NOTE]
-> JSON Placeholder provides realistic fake data with endpoints for posts, comments, albums, photos, todos, and users. It's perfect for learning API consumption without API keys or quotas.
+> `RestClient` was introduced in Spring 6.1 as the modern replacement for `RestTemplate`. It provides a fluent API for synchronous HTTP calls.
 
-### Step 1: Configure Properties with @Value
+### Step 1: Create Domain Classes
 
-1. Rather than creating a new project, we'll add services to the existing `restclient` project. First, let's add configuration properties to `src/main/resources/application.properties`:
-
-```properties
-# API Configuration using @Value annotation examples
-api.jsonplaceholder.base-url=https://jsonplaceholder.typicode.com
-api.jsonplaceholder.timeout=5000
-api.nasa.astros-url=http://api.open-notify.org/astros.json
-api.nasa.timeout=10000
-
-# Application Information
-app.name=REST Client Demo
-app.version=1.0.0
-app.description=Demonstrates RestClient and WebClient with external APIs
-```
-
-2. Create a configuration class to demonstrate various `@Value` usage patterns in `com.kousenit.restclient.config.ApiConfig`:
-
-```java
-@Configuration
-public class ApiConfig {
-    
-    // Inject values from application.properties
-    @Value("${app.name}")
-    private String applicationName;
-    
-    @Value("${app.version}")
-    private String applicationVersion;
-    
-    @Value("${app.description}")
-    private String applicationDescription;
-    
-    // Inject system properties with defaults
-    @Value("${java.version:unknown}")
-    private String javaVersion;
-    
-    @Value("${user.name:anonymous}")
-    private String userName;
-    
-    // Environment variable with default
-    @Value("${HOME:unknown}")
-    private String homeDirectory;
-    
-    // Getter methods and utility method
-    public String getApplicationInfo() {
-        return String.format("%s v%s - %s (Java %s, User: %s)", 
-                applicationName, applicationVersion, applicationDescription, 
-                javaVersion, userName);
-    }
-    
-    // ... other getters ...
-}
-```
-
-**Key `@Value` patterns demonstrated:**
-- `@Value("${property.name}")`: Inject from application.properties
-- `@Value("${property.name:default}")`: Inject with default value if not found
-- System properties: `${java.version}`, `${user.name}`
-- Environment variables: `${HOME}`
-
-### Step 2: Create Domain Classes and Service
-
-3. First, let's examine the JSON structure. A typical user response from `https://jsonplaceholder.typicode.com/users/1` looks like:
+1. We'll add to the existing `restclient` project. First, examine the JSON structure from `https://jsonplaceholder.typicode.com/users/1`:
 
    ```json
    {
      "id": 1,
      "name": "Leanne Graham",
      "username": "Bret",
-     "email": "Sincere@april.biz",
-     "address": {
-       "street": "Kulas Light",
-       "suite": "Apt. 556",
-       "city": "Gwenborough",
-       "zipcode": "92998-3874",
-       "geo": {
-         "lat": "-37.3159",
-         "lng": "81.1496"
-       }
-     },
-     "phone": "1-770-736-8031 x56442",
-     "website": "hildegard.org",
-     "company": {
-       "name": "Romaguera-Crona",
-       "catchPhrase": "Multi-layered client-server neural-network",
-       "bs": "harness real-time e-markets"
-     }
+     "email": "Sincere@april.biz"
    }
    ```
 
-3. Create domain classes using records in the `com.kousenit.restclient.json` package. Since this demonstrates nested JSON objects, we'll create multiple records:
+2. Create a simple record for users in `com.kousenit.restclient.json`:
 
    ```java
-   package com.kousenit.restclient.json;
-
-   public record Address(
-           String street,
-           String suite, 
-           String city,
-           String zipcode,
-           Geo geo
-   ) {}
-
-   public record Geo(String lat, String lng) {}
-
-   public record Company(
-           String name,
-           String catchPhrase,
-           String bs
-   ) {}
-
-   public record User(
-           Long id,
-           String name,
-           String username,
-           String email,
-           Address address,
-           String phone,
-           String website,
-           Company company
+   public record SimpleUser(
+       Long id,
+       String name,
+       String username,
+       String email
    ) {}
    ```
 
-4. For posts, the JSON structure is simpler. A typical post from `https://jsonplaceholder.typicode.com/posts/1`:
-
-   ```json
-   {
-     "userId": 1,
-     "id": 1,
-     "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
-     "body": "quia et suscipit\nsuscipit recusandae consequuntur..."
-   }
-   ```
-
-   Create a record for posts:
+3. For posts, create another record:
 
    ```java
    public record Post(
-           Long userId,
-           Long id,
-           String title,
-           String body
+       Long userId,
+       Long id,
+       String title,
+       String body
    ) {}
    ```
 
-5. Create a service called `JsonPlaceholderService` that demonstrates `@Value` injection in the `com.kousenit.restclient.services` package:
+### Step 2: Create Basic Service
+
+4. Create `BasicJsonPlaceholderService` in `com.kousenit.restclient.services`:
 
    ```java
    @Service
-   public class JsonPlaceholderService {
+   public class BasicJsonPlaceholderService {
        private final RestClient restClient;
-       private final WebClient webClient;
-       private final String baseUrl;
-       private final int timeoutMs;
 
-       public JsonPlaceholderService(
-               @Value("${api.jsonplaceholder.base-url}") String baseUrl,
-               @Value("${api.jsonplaceholder.timeout:5000}") int timeoutMs) {
-           
-           this.baseUrl = baseUrl;
-           this.timeoutMs = timeoutMs;
-           
-           // Configure RestClient with injected base URL
+       public BasicJsonPlaceholderService() {
            this.restClient = RestClient.builder()
-                   .baseUrl(baseUrl)
-                   .build();
-           
-           // Configure WebClient with injected base URL and timeout
-           HttpClient httpClient = HttpClient.create()
-                   .responseTimeout(Duration.ofMillis(timeoutMs));
-           
-           this.webClient = WebClient.builder()
-                   .baseUrl(baseUrl)
-                   .clientConnector(new ReactorClientHttpConnector(httpClient))
+                   .baseUrl("https://jsonplaceholder.typicode.com")
                    .build();
        }
-       
-       // Getter methods to verify @Value injection
-       public String getBaseUrl() { return baseUrl; }
-       public int getTimeoutMs() { return timeoutMs; }
 
-       // ... methods to come
-   }
-   ```
-
-   **Key points about `@Value` usage:**
-   - `@Value("${api.jsonplaceholder.base-url}")`: Injects property value (required)
-   - `@Value("${api.jsonplaceholder.timeout:5000}")`: Injects with default value
-   - Constructor injection allows final fields and testability
-   - Configuration is externalized and environment-specific
-
-6. Add synchronous methods using `RestClient`:
-
-   ```java
-   public List<User> getAllUsersSync() {
-       return restClient.get()
-               .uri("/users")
-               .accept(MediaType.APPLICATION_JSON)
-               .retrieve()
-               .body(new ParameterizedTypeReference<List<User>>() {});
-   }
-
-   public Optional<User> getUserByIdSync(Long id) {
-       try {
-           User user = restClient.get()
-                   .uri("/users/{id}", id)
+       // Get all users
+       public List<SimpleUser> getAllUsers() {
+           return restClient.get()
+                   .uri("/users")
                    .accept(MediaType.APPLICATION_JSON)
                    .retrieve()
-                   .body(User.class);
-           return Optional.ofNullable(user);
-       } catch (Exception e) {
-           return Optional.empty();
+                   .body(new ParameterizedTypeReference<List<SimpleUser>>() {});
+       }
+
+       // Get user by ID
+       public Optional<SimpleUser> getUserById(Long id) {
+           try {
+               SimpleUser user = restClient.get()
+                       .uri("/users/{id}", id)
+                       .accept(MediaType.APPLICATION_JSON)
+                       .retrieve()
+                       .body(SimpleUser.class);
+               return Optional.ofNullable(user);
+           } catch (Exception e) {
+               return Optional.empty();
+           }
+       }
+
+       // Get posts by user
+       public List<Post> getPostsByUserId(Long userId) {
+           return restClient.get()
+                   .uri("/users/{userId}/posts", userId)
+                   .accept(MediaType.APPLICATION_JSON)
+                   .retrieve()
+                   .body(new ParameterizedTypeReference<List<Post>>() {});
+       }
+
+       // Create a new post
+       public Post createPost(Post post) {
+           return restClient.post()
+                   .uri("/posts")
+                   .contentType(MediaType.APPLICATION_JSON)
+                   .accept(MediaType.APPLICATION_JSON)
+                   .body(post)
+                   .retrieve()
+                   .body(Post.class);
        }
    }
-
-   public List<Post> getPostsByUserIdSync(Long userId) {
-       return restClient.get()
-               .uri("/users/{userId}/posts", userId)
-               .accept(MediaType.APPLICATION_JSON)
-               .retrieve()
-               .body(new ParameterizedTypeReference<List<Post>>() {});
-   }
    ```
 
-7. Add asynchronous methods using `WebClient`:
+### Step 3: Create Tests
 
-   ```java
-   public Flux<User> getAllUsersAsync() {
-       return webClient.get()
-               .uri("/users")
-               .accept(MediaType.APPLICATION_JSON)
-               .retrieve()
-               .bodyToFlux(User.class)
-               .log();
-   }
-
-   public Mono<User> getUserByIdAsync(Long id) {
-       return webClient.get()
-               .uri("/users/{id}", id)
-               .accept(MediaType.APPLICATION_JSON)
-               .retrieve()
-               .bodyToMono(User.class)
-               .log();
-   }
-
-   public Flux<Post> getPostsByUserIdAsync(Long userId) {
-       return webClient.get()
-               .uri("/users/{userId}/posts", userId)
-               .accept(MediaType.APPLICATION_JSON)
-               .retrieve()
-               .bodyToFlux(Post.class)
-               .log();
-   }
-   ```
-
-8. Add POST methods for creating new resources. Note that JSON Placeholder simulates creation but doesn't persist data:
-
-   ```java
-   // POST methods - Create new resources
-   public User createUserSync(User user) {
-       return restClient.post()
-               .uri("/users")
-               .contentType(MediaType.APPLICATION_JSON)
-               .accept(MediaType.APPLICATION_JSON)
-               .body(user)
-               .retrieve()
-               .body(User.class);
-   }
-
-   public Post createPostSync(Post post) {
-       return restClient.post()
-               .uri("/posts")
-               .contentType(MediaType.APPLICATION_JSON)
-               .accept(MediaType.APPLICATION_JSON)
-               .body(post)
-               .retrieve()
-               .body(Post.class);
-   }
-
-   public Mono<User> createUserAsync(User user) {
-       return webClient.post()
-               .uri("/users")
-               .contentType(MediaType.APPLICATION_JSON)
-               .accept(MediaType.APPLICATION_JSON)
-               .bodyValue(user)
-               .retrieve()
-               .bodyToMono(User.class)
-               .log();
-   }
-
-   public Mono<Post> createPostAsync(Post post) {
-       return webClient.post()
-               .uri("/posts")
-               .contentType(MediaType.APPLICATION_JSON)
-               .accept(MediaType.APPLICATION_JSON)
-               .bodyValue(post)
-               .retrieve()
-               .bodyToMono(Post.class)
-               .log();
-   }
-   ```
-
-9. Add DELETE methods for removing resources:
-
-   ```java
-   // DELETE methods - Remove resources
-   public void deleteUserSync(Long id) {
-       restClient.delete()
-               .uri("/users/{id}", id)
-               .retrieve()
-               .toBodilessEntity();
-   }
-
-   public void deletePostSync(Long id) {
-       restClient.delete()
-               .uri("/posts/{id}", id)
-               .retrieve()
-               .toBodilessEntity();
-   }
-
-   public Mono<Void> deleteUserAsync(Long id) {
-       return webClient.delete()
-               .uri("/users/{id}", id)
-               .retrieve()
-               .bodyToMono(Void.class)
-               .log();
-   }
-
-   public Mono<Void> deletePostAsync(Long id) {
-       return webClient.delete()
-               .uri("/posts/{id}", id)
-               .retrieve()
-               .bodyToMono(Void.class)
-               .log();
-   }
-   ```
-
-10. You'll need these imports for the generic collections:
-
-   ```java
-   import org.springframework.core.ParameterizedTypeReference;
-   import reactor.core.publisher.Flux;
-   import reactor.core.publisher.Mono;
-   ```
-
-9. Create a comprehensive test class called `JsonPlaceholderServiceTest`:
+5. Create `BasicJsonPlaceholderServiceTest`:
 
    ```java
    @SpringBootTest
-   class JsonPlaceholderServiceTest {
-       private final Logger logger = LoggerFactory.getLogger(JsonPlaceholderServiceTest.class);
+   class BasicJsonPlaceholderServiceTest {
+       private final Logger logger = LoggerFactory.getLogger(BasicJsonPlaceholderServiceTest.class);
 
        @Autowired
-       private JsonPlaceholderService service;
+       private BasicJsonPlaceholderService service;
 
        @Test
-       void getAllUsersSync() {
-           List<User> users = service.getAllUsersSync();
+       void getAllUsers() {
+           List<SimpleUser> users = service.getAllUsers();
+           
            assertNotNull(users);
-           assertFalse(users.isEmpty());
-           assertEquals(10, users.size()); // JSON Placeholder has 10 users
+           assertEquals(10, users.size());
            
-           User firstUser = users.get(0);
-           assertNotNull(firstUser.name());
-           assertNotNull(firstUser.email());
-           assertNotNull(firstUser.address());
-           assertNotNull(firstUser.company());
-           
-           logger.info("First user: {}", firstUser);
+           SimpleUser firstUser = users.get(0);
+           assertEquals("Leanne Graham", firstUser.name());
+           logger.info("Retrieved {} users", users.size());
        }
 
        @Test
-       void getUserByIdSync() {
-           Optional<User> userOpt = service.getUserByIdSync(1L);
+       void getUserById() {
+           Optional<SimpleUser> userOpt = service.getUserById(1L);
+           
            assertTrue(userOpt.isPresent());
-           
-           User user = userOpt.get();
-           assertEquals(1L, user.id());
-           assertEquals("Leanne Graham", user.name());
-           assertNotNull(user.address().geo());
-           
-           logger.info("User 1: {}", user);
+           assertEquals("Leanne Graham", userOpt.get().name());
        }
 
        @Test
-       void getUserByIdSyncNotFound() {
-           Optional<User> userOpt = service.getUserByIdSync(999L);
+       void getUserByIdNotFound() {
+           Optional<SimpleUser> userOpt = service.getUserById(999L);
            assertFalse(userOpt.isPresent());
        }
 
        @Test
-       void getPostsByUserIdSync() {
-           List<Post> posts = service.getPostsByUserIdSync(1L);
+       void getPostsByUserId() {
+           List<Post> posts = service.getPostsByUserId(1L);
+           
            assertNotNull(posts);
-           assertFalse(posts.isEmpty());
-           assertEquals(10, posts.size()); // Each user has 10 posts
-           
-           posts.forEach(post -> {
-               assertEquals(1L, post.userId());
-               assertNotNull(post.title());
-               assertNotNull(post.body());
-           });
-           
-           logger.info("User 1 has {} posts", posts.size());
+           assertEquals(10, posts.size());
+           posts.forEach(post -> assertEquals(1L, post.userId()));
        }
 
        @Test
-       void getAllUsersAsync() {
-           List<User> users = service.getAllUsersAsync()
-                   .collectList()
-                   .block(Duration.ofSeconds(5));
-                   
-           assertNotNull(users);
-           assertEquals(10, users.size());
-           logger.info("Retrieved {} users asynchronously", users.size());
-       }
-
-       @Test
-       void getUserByIdAsync() {
-           User user = service.getUserByIdAsync(1L)
-                   .block(Duration.ofSeconds(5));
-                   
-           assertNotNull(user);
-           assertEquals("Leanne Graham", user.name());
-           logger.info("User retrieved asynchronously: {}", user.name());
-       }
-
-       @Test
-       void getAllUsersAsyncWithStepVerifier() {
-           service.getAllUsersAsync()
-                   .as(StepVerifier::create)
-                   .expectNextCount(10)
-                   .verifyComplete();
-       }
-
-       @Test
-       void getComplexUserData() {
-           // Demonstrate working with nested objects
-           Optional<User> userOpt = service.getUserByIdSync(1L);
-           assertTrue(userOpt.isPresent());
+       void createPost() {
+           Post newPost = new Post(1L, null, "Test Title", "Test Body");
+           Post created = service.createPost(newPost);
            
-           User user = userOpt.get();
-           Address address = user.address();
-           Company company = user.company();
-           
-           assertNotNull(address.city());
-           assertNotNull(address.geo().lat());
-           assertNotNull(company.name());
-           
-           logger.info("User {} lives in {} and works at {}", 
-                   user.name(), address.city(), company.name());
-       }
-
-       @Test
-       void createUserSync() {
-           User newUser = createTestUser();
-           
-           User createdUser = service.createUserSync(newUser);
-           
-           assertNotNull(createdUser);
-           assertNotNull(createdUser.id()); // JSON Placeholder assigns an ID
-           assertEquals(newUser.name(), createdUser.name());
-           assertEquals(newUser.email(), createdUser.email());
-           
-           logger.info("Created user: {}", createdUser);
-       }
-
-       @Test
-       void createPostSync() {
-           Post newPost = new Post(1L, null, "Test Post Title", "This is a test post body");
-           
-           Post createdPost = service.createPostSync(newPost);
-           
-           assertNotNull(createdPost);
-           assertNotNull(createdPost.id()); // JSON Placeholder assigns an ID
-           assertEquals(newPost.title(), createdPost.title());
-           assertEquals(newPost.body(), createdPost.body());
-           assertEquals(newPost.userId(), createdPost.userId());
-           
-           logger.info("Created post: {}", createdPost);
-       }
-
-       @Test
-       void createUserAsync() {
-           User newUser = createTestUser();
-           
-           service.createUserAsync(newUser)
-                   .as(StepVerifier::create)
-                   .expectNextMatches(user -> 
-                           user.name().equals("John Tester") && 
-                           user.email().equals("john@test.com"))
-                   .verifyComplete();
-       }
-
-       @Test
-       void createPostAsync() {
-           Post newPost = new Post(1L, null, "Async Test Post", "This is an async test post");
-           
-           service.createPostAsync(newPost)
-                   .as(StepVerifier::create)
-                   .expectNextMatches(post -> 
-                           post.title().equals("Async Test Post") && 
-                           post.userId().equals(1L))
-                   .verifyComplete();
-       }
-
-       @Test
-       void deleteUserSync() {
-           // JSON Placeholder sometimes has timeout issues with DELETE, so we test the method exists
-           // and handles the request properly, even if it times out
-           try {
-               service.deleteUserSync(1L);
-               logger.info("Delete user 1 completed successfully");
-           } catch (Exception e) {
-               // Expect either success or timeout - both are acceptable for this demo
-               assertTrue(e.getMessage().contains("timeout") || e.getMessage().contains("I/O error"),
-                       "Unexpected error type: " + e.getMessage());
-               logger.info("Delete user 1 timed out (expected behavior with JSON Placeholder)");
-           }
-       }
-
-       @Test
-       void deletePostSync() {
-           try {
-               service.deletePostSync(1L);
-               logger.info("Delete post 1 completed successfully");
-           } catch (Exception e) {
-               // Expect either success or timeout - both are acceptable for this demo
-               assertTrue(e.getMessage().contains("timeout") || e.getMessage().contains("I/O error"),
-                       "Unexpected error type: " + e.getMessage());
-               logger.info("Delete post 1 timed out (expected behavior with JSON Placeholder)");
-           }
-       }
-
-       @Test
-       void deleteUserAsync() {
-           // For async deletes, we'll test with a timeout and handle potential network issues
-           try {
-               service.deleteUserAsync(1L)
-                       .timeout(Duration.ofSeconds(10))
-                       .block();
-               logger.info("Delete user 1 asynchronously completed");
-           } catch (Exception e) {
-               // Handle timeout or network issues gracefully
-               assertTrue(e.getCause() instanceof java.util.concurrent.TimeoutException || 
-                         e.getMessage().contains("timeout") ||
-                         e.getMessage().contains("I/O error"),
-                       "Unexpected error type: " + e.getMessage());
-               logger.info("Delete user 1 async timed out (expected behavior with JSON Placeholder)");
-           }
-       }
-
-       @Test
-       void deletePostAsync() {
-           try {
-               service.deletePostAsync(1L)
-                       .timeout(Duration.ofSeconds(10))
-                       .block();
-               logger.info("Delete post 1 asynchronously completed");
-           } catch (Exception e) {
-               // Handle timeout or network issues gracefully
-               assertTrue(e.getCause() instanceof java.util.concurrent.TimeoutException || 
-                         e.getMessage().contains("timeout") ||
-                         e.getMessage().contains("I/O error"),
-                       "Unexpected error type: " + e.getMessage());
-               logger.info("Delete post 1 async timed out (expected behavior with JSON Placeholder)");
-           }
-       }
-
-       @Test
-       void testValueInjection() {
-           // Test that @Value annotations are working correctly
-           assertEquals("https://jsonplaceholder.typicode.com", service.getBaseUrl());
-           assertEquals(5000, service.getTimeoutMs());
-           
-           logger.info("Base URL from @Value: {}", service.getBaseUrl());
-           logger.info("Timeout from @Value: {}ms", service.getTimeoutMs());
-       }
-
-       private User createTestUser() {
-           Geo geo = new Geo("-37.3159", "81.1496");
-           Address address = new Address("123 Test St", "Test Suite", "Testville", "12345", geo);
-           Company company = new Company("Test Corp", "Testing is our business", "test");
-           
-           return new User(null, "John Tester", "john.tester", "john@test.com", address, "555-1234", "johntester.com", company);
+           assertNotNull(created.id());
+           assertEquals("Test Title", created.title());
        }
    }
    ```
 
-10. Add the required imports to your test class:
+### Key Learning Points
 
-    ```java
-    import reactor.test.StepVerifier;
-    import java.time.Duration;
-    import java.util.Optional;
-    import static org.junit.jupiter.api.Assertions.*;
-    import org.slf4j.Logger;
-    import org.slf4j.LoggerFactory;
-    ```
-
-11. Create a test for the configuration class `ApiConfigTest`:
-
-    ```java
-    @SpringBootTest
-    class ApiConfigTest {
-        private final Logger logger = LoggerFactory.getLogger(ApiConfigTest.class);
-
-        @Autowired
-        private ApiConfig apiConfig;
-
-        @Test
-        void testApplicationPropertiesInjection() {
-            // Test @Value injection from application.properties
-            assertEquals("REST Client Demo", apiConfig.getApplicationName());
-            assertEquals("1.0.0", apiConfig.getApplicationVersion());
-            
-            logger.info("Application Info: {}", apiConfig.getApplicationInfo());
-        }
-
-        @Test
-        void testSystemPropertyInjection() {
-            // Test @Value injection of system properties
-            assertNotNull(apiConfig.getJavaVersion());
-            assertNotEquals("unknown", apiConfig.getJavaVersion());
-            
-            logger.info("Java Version from system property: {}", apiConfig.getJavaVersion());
-        }
-
-        @Test
-        void testEnvironmentVariableInjection() {
-            // Test @Value injection of environment variables
-            assertNotNull(apiConfig.getHomeDirectory());
-            
-            logger.info("Home Directory from environment variable: {}", apiConfig.getHomeDirectory());
-        }
-    }
-    ```
-
-12. Run the tests to verify the integration works correctly. All tests should pass, demonstrating successful API consumption and configuration injection.
-
-## Key Learning Points
-
-This exercise demonstrates several important concepts:
-
-- **No API Keys Required**: JSON Placeholder removes authentication complexity
-- **Configuration with @Value**: Injecting properties from application.properties and system environment
-- **Default Values**: Using `@Value("${property:default}")` for optional configuration
-- **Externalized Configuration**: Separating configuration from code for different environments
-- **Nested JSON Mapping**: Records handle complex nested structures elegantly  
-- **Path Parameters**: Using `{id}` placeholders in URIs
-- **Error Handling**: Graceful handling of non-existent resources
-- **Synchronous vs Asynchronous**: Comparing `RestClient` and `WebClient` approaches
-- **Type Safety**: Generic collections with `ParameterizedTypeReference`
-- **Reactive Testing**: Using `StepVerifier` for reactive streams
-- **HTTP Methods**: Complete CRUD operations with GET, POST, and DELETE
-- **Content Types**: Setting proper `Content-Type` and `Accept` headers
-- **Request Bodies**: Sending JSON data with POST requests
+- **RestClient Basics**: Fluent API for building HTTP requests
+- **Type Safety**: Using `ParameterizedTypeReference` for generic collections
+- **Path Parameters**: Using URI templates with `{id}` placeholders
+- **Error Handling**: Wrapping calls in try-catch for Optional returns
+- **Content Negotiation**: Setting Accept and Content-Type headers
 
 > [!TIP]
-> JSON Placeholder is perfect for prototyping and testing. It supports GET, POST, PUT, PATCH, and DELETE methods (though modifications aren't persisted), making it ideal for learning REST patterns.
+> Start with simple domain models and basic operations. You can add complexity as you become comfortable with the fundamentals.
+
+[Back to Table of Contents](#table-of-contents)
+
+## Configuration with @Value and Error Handling
+
+This exercise builds on the basic REST client by adding configuration management with `@Value` annotations and proper error handling strategies.
+
+> [!NOTE]
+> The `@Value` annotation allows you to inject configuration from multiple sources: application properties, system properties, and environment variables.
+
+### Step 1: Add Configuration Properties
+
+1. Add to `src/main/resources/application.properties`:
+
+   ```properties
+   # API Configuration
+   api.jsonplaceholder.base-url=https://jsonplaceholder.typicode.com
+   api.jsonplaceholder.timeout=5000
+   api.jsonplaceholder.max-retries=3
+
+   # Application Info
+   app.name=REST Client Demo
+   app.version=1.0.0
+   ```
+
+### Step 2: Create Configuration Class
+
+2. Create `ApiConfig` in `com.kousenit.restclient.config`:
+
+   ```java
+   @Configuration
+   public class ApiConfig {
+       
+       @Value("${app.name}")
+       private String applicationName;
+       
+       @Value("${app.version}")
+       private String applicationVersion;
+       
+       // System property with default
+       @Value("${java.version:unknown}")
+       private String javaVersion;
+       
+       // Environment variable
+       @Value("${USER:anonymous}")
+       private String userName;
+       
+       public String getApplicationInfo() {
+           return String.format("%s v%s (Java %s, User: %s)", 
+                   applicationName, applicationVersion, javaVersion, userName);
+       }
+       
+       // Getters...
+   }
+   ```
+
+### Step 3: Enhanced Service with Configuration
+
+3. Create `ConfigurableJsonPlaceholderService`:
+
+   ```java
+   @Service
+   public class ConfigurableJsonPlaceholderService {
+       private final RestClient restClient;
+       private final String baseUrl;
+       private final int timeoutMs;
+       private final int maxRetries;
+       private final Logger logger = LoggerFactory.getLogger(ConfigurableJsonPlaceholderService.class);
+
+       public ConfigurableJsonPlaceholderService(
+               @Value("${api.jsonplaceholder.base-url}") String baseUrl,
+               @Value("${api.jsonplaceholder.timeout:5000}") int timeoutMs,
+               @Value("${api.jsonplaceholder.max-retries:3}") int maxRetries) {
+           
+           this.baseUrl = baseUrl;
+           this.timeoutMs = timeoutMs;
+           this.maxRetries = maxRetries;
+           
+           // Configure RestClient with timeout
+           this.restClient = RestClient.builder()
+                   .baseUrl(baseUrl)
+                   .requestFactory(clientRequestFactory())
+                   .build();
+           
+           logger.info("Initialized with baseUrl: {}, timeout: {}ms, maxRetries: {}", 
+                      baseUrl, timeoutMs, maxRetries);
+       }
+
+       private ClientHttpRequestFactory clientRequestFactory() {
+           var factory = new SimpleClientHttpRequestFactory();
+           factory.setConnectTimeout(Duration.ofMillis(timeoutMs));
+           factory.setReadTimeout(Duration.ofMillis(timeoutMs));
+           return factory;
+       }
+
+       // Enhanced method with retry logic
+       public Optional<SimpleUser> getUserByIdWithRetry(Long id) {
+           int attempts = 0;
+           Exception lastException = null;
+           
+           while (attempts < maxRetries) {
+               try {
+                   logger.debug("Attempt {} to fetch user {}", attempts + 1, id);
+                   SimpleUser user = restClient.get()
+                           .uri("/users/{id}", id)
+                           .retrieve()
+                           .body(SimpleUser.class);
+                   return Optional.ofNullable(user);
+               } catch (HttpClientErrorException.NotFound e) {
+                   logger.warn("User {} not found", id);
+                   return Optional.empty();
+               } catch (Exception e) {
+                   lastException = e;
+                   attempts++;
+                   if (attempts < maxRetries) {
+                       logger.warn("Attempt {} failed, retrying...", attempts);
+                       try {
+                           Thread.sleep(1000 * attempts); // Exponential backoff
+                       } catch (InterruptedException ie) {
+                           Thread.currentThread().interrupt();
+                           break;
+                       }
+                   }
+               }
+           }
+           
+           logger.error("Failed after {} attempts", maxRetries, lastException);
+           throw new ServiceUnavailableException("Service unavailable after " + maxRetries + " attempts");
+       }
+
+       // Custom exception
+       public static class ServiceUnavailableException extends RuntimeException {
+           public ServiceUnavailableException(String message) {
+               super(message);
+           }
+       }
+   }
+   ```
+
+### Step 4: Add Nested JSON Support
+
+4. Create records for complex JSON structures:
+
+   ```java
+   public record Address(
+       String street,
+       String suite,
+       String city,
+       String zipcode
+   ) {}
+
+   public record Company(
+       String name,
+       String catchPhrase,
+       String bs
+   ) {}
+
+   public record User(
+       Long id,
+       String name,
+       String username,
+       String email,
+       Address address,
+       String phone,
+       String website,
+       Company company
+   ) {}
+   ```
+
+### Step 5: Test Configuration and Error Handling
+
+5. Create comprehensive tests:
+
+   ```java
+   @SpringBootTest
+   class ConfigurableJsonPlaceholderServiceTest {
+       
+       @Autowired
+       private ConfigurableJsonPlaceholderService service;
+       
+       @Autowired
+       private ApiConfig apiConfig;
+       
+       @Test
+       void testConfiguration() {
+           assertNotNull(service.getBaseUrl());
+           assertEquals(5000, service.getTimeoutMs());
+           assertEquals(3, service.getMaxRetries());
+       }
+       
+       @Test
+       void testRetryLogic() {
+           // Test with valid ID
+           Optional<SimpleUser> user = service.getUserByIdWithRetry(1L);
+           assertTrue(user.isPresent());
+       }
+       
+       @Test
+       void testNotFound() {
+           // Test 404 handling
+           Optional<SimpleUser> user = service.getUserByIdWithRetry(999L);
+           assertFalse(user.isPresent());
+       }
+       
+       @Test
+       void testApiConfig() {
+           String appInfo = apiConfig.getApplicationInfo();
+           assertNotNull(appInfo);
+           assertTrue(appInfo.contains("REST Client Demo"));
+           assertTrue(appInfo.contains("1.0.0"));
+       }
+   }
+   ```
+
+### Key Learning Points
+
+- **@Value Patterns**: Property injection with defaults
+- **Constructor Injection**: Immutable configuration
+- **Timeout Configuration**: Connection and read timeouts
+- **Retry Logic**: Exponential backoff for resilience
+- **Error Differentiation**: Handling 404 vs other errors
+- **Custom Exceptions**: Domain-specific error types
+- **Logging Best Practices**: Debug, warn, and error levels
+
+> [!TIP]
+> Always provide sensible defaults for configuration values. This makes your application more resilient and easier to deploy.
+
+[Back to Table of Contents](#table-of-contents)
+
+## Reactive Programming with WebClient
+
+This exercise introduces reactive programming using Spring's `WebClient` for asynchronous, non-blocking API calls.
+
+> [!NOTE]
+> `WebClient` is the reactive alternative to `RestClient`, returning `Mono` (single value) and `Flux` (multiple values) from Project Reactor.
+
+### Step 1: Create Reactive Service
+
+1. Create `ReactiveJsonPlaceholderService` in `com.kousenit.restclient.services`:
+
+   ```java
+   @Service
+   public class ReactiveJsonPlaceholderService {
+       private final WebClient webClient;
+       private final Logger logger = LoggerFactory.getLogger(ReactiveJsonPlaceholderService.class);
+
+       public ReactiveJsonPlaceholderService() {
+           this.webClient = WebClient.builder()
+                   .baseUrl("https://jsonplaceholder.typicode.com")
+                   .build();
+       }
+
+       // Get all users reactively
+       public Flux<SimpleUser> getAllUsersReactive() {
+           return webClient.get()
+                   .uri("/users")
+                   .accept(MediaType.APPLICATION_JSON)
+                   .retrieve()
+                   .bodyToFlux(SimpleUser.class)
+                   .doOnNext(user -> logger.debug("Received user: {}", user.name()))
+                   .doOnComplete(() -> logger.info("Completed fetching users"))
+                   .doOnError(error -> logger.error("Error fetching users", error));
+       }
+
+       // Get single user
+       public Mono<SimpleUser> getUserByIdReactive(Long id) {
+           return webClient.get()
+                   .uri("/users/{id}", id)
+                   .retrieve()
+                   .bodyToMono(SimpleUser.class)
+                   .doOnSuccess(user -> logger.debug("Retrieved user: {}", user))
+                   .onErrorResume(WebClientResponseException.NotFound.class, 
+                               e -> Mono.empty());
+       }
+
+       // Parallel requests example
+       public Mono<UserWithPosts> getUserWithPosts(Long userId) {
+           Mono<SimpleUser> userMono = getUserByIdReactive(userId);
+           Mono<List<Post>> postsMono = getPostsByUserIdReactive(userId)
+                   .collectList();
+           
+           return Mono.zip(userMono, postsMono, UserWithPosts::new);
+       }
+
+       // Get posts as Flux
+       public Flux<Post> getPostsByUserIdReactive(Long userId) {
+           return webClient.get()
+                   .uri("/users/{userId}/posts", userId)
+                   .retrieve()
+                   .bodyToFlux(Post.class);
+       }
+
+       // Create post reactively
+       public Mono<Post> createPostReactive(Post post) {
+           return webClient.post()
+                   .uri("/posts")
+                   .contentType(MediaType.APPLICATION_JSON)
+                   .bodyValue(post)
+                   .retrieve()
+                   .bodyToMono(Post.class)
+                   .timeout(Duration.ofSeconds(5))
+                   .retry(3);
+       }
+
+       // Record for combined data
+       public record UserWithPosts(SimpleUser user, List<Post> posts) {}
+   }
+   ```
+
+### Step 2: Advanced Reactive Patterns
+
+2. Add methods demonstrating reactive operators:
+
+   ```java
+   // Transform and filter data
+   public Flux<String> getUserNames() {
+       return getAllUsersReactive()
+               .map(SimpleUser::name)
+               .filter(name -> name.length() > 10)
+               .sort()
+               .distinct();
+   }
+
+   // Batch processing
+   public Flux<List<SimpleUser>> getUsersInBatches(int batchSize) {
+       return getAllUsersReactive()
+               .buffer(batchSize);
+   }
+
+   // Error handling with fallback
+   public Mono<SimpleUser> getUserWithFallback(Long id) {
+       return getUserByIdReactive(id)
+               .switchIfEmpty(Mono.just(
+                   new SimpleUser(0L, "Unknown User", "unknown", "unknown@example.com")
+               ));
+   }
+
+   // Combine multiple API calls
+   public Flux<Post> getPostsForMultipleUsers(List<Long> userIds) {
+       return Flux.fromIterable(userIds)
+               .flatMap(this::getPostsByUserIdReactive)
+               .sort(Comparator.comparing(Post::title));
+   }
+   ```
+
+### Step 3: Test Reactive Operations
+
+3. Create reactive tests using `StepVerifier`:
+
+   ```java
+   @SpringBootTest
+   class ReactiveJsonPlaceholderServiceTest {
+       
+       @Autowired
+       private ReactiveJsonPlaceholderService service;
+       
+       @Test
+       void getAllUsersReactive() {
+           service.getAllUsersReactive()
+                   .as(StepVerifier::create)
+                   .expectNextCount(10)
+                   .verifyComplete();
+       }
+       
+       @Test
+       void getUserByIdReactive() {
+           service.getUserByIdReactive(1L)
+                   .as(StepVerifier::create)
+                   .assertNext(user -> {
+                       assertEquals("Leanne Graham", user.name());
+                       assertEquals("Bret", user.username());
+                   })
+                   .verifyComplete();
+       }
+       
+       @Test
+       void getUserNotFound() {
+           service.getUserByIdReactive(999L)
+                   .as(StepVerifier::create)
+                   .verifyComplete(); // Empty due to error handling
+       }
+       
+       @Test
+       void getUserWithPosts() {
+           service.getUserWithPosts(1L)
+                   .as(StepVerifier::create)
+                   .assertNext(result -> {
+                       assertEquals("Leanne Graham", result.user().name());
+                       assertEquals(10, result.posts().size());
+                   })
+                   .verifyComplete();
+       }
+       
+       @Test
+       void getUserNames() {
+           service.getUserNames()
+                   .as(StepVerifier::create)
+                   .expectNextCount(count -> count > 0)
+                   .verifyComplete();
+       }
+       
+       @Test
+       void testTimeout() {
+           // Test timeout behavior
+           Post newPost = new Post(1L, null, "Test", "Body");
+           
+           service.createPostReactive(newPost)
+                   .as(StepVerifier::create)
+                   .assertNext(post -> assertNotNull(post.id()))
+                   .verifyComplete();
+       }
+   }
+   ```
+
+### Step 4: Performance Comparison
+
+4. Add a performance comparison test:
+
+   ```java
+   @Test
+   void compareBlockingVsReactive() {
+       long start = System.currentTimeMillis();
+       
+       // Blocking approach - sequential
+       for (int i = 1; i <= 5; i++) {
+           restClient.get()
+                   .uri("/users/" + i)
+                   .retrieve()
+                   .body(SimpleUser.class);
+       }
+       long blockingTime = System.currentTimeMillis() - start;
+       
+       // Reactive approach - parallel
+       start = System.currentTimeMillis();
+       Flux.range(1, 5)
+               .flatMap(i -> service.getUserByIdReactive(Long.valueOf(i)))
+               .collectList()
+               .block();
+       long reactiveTime = System.currentTimeMillis() - start;
+       
+       logger.info("Blocking: {}ms, Reactive: {}ms", blockingTime, reactiveTime);
+       // Reactive should be faster due to parallel execution
+   }
+   ```
+
+### Key Learning Points
+
+- **Reactive Types**: `Mono<T>` for 0-1 values, `Flux<T>` for 0-N values
+- **Non-Blocking**: Operations don't block threads
+- **Operators**: map, filter, flatMap, zip for data transformation
+- **Error Handling**: onErrorResume, onErrorReturn, retry
+- **Testing**: StepVerifier for asserting reactive streams
+- **Backpressure**: Automatic flow control
+- **Parallel Execution**: flatMap for concurrent operations
+
+> [!TIP]
+> Use reactive programming when you need high concurrency, streaming data, or composition of multiple asynchronous operations. For simple CRUD operations, `RestClient` might be sufficient.
+
+> [!WARNING]
+> Avoid calling `.block()` in production code as it defeats the purpose of reactive programming. Use it only in tests or at the edge of your application.
 
 [Back to Table of Contents](#table-of-contents)
 
