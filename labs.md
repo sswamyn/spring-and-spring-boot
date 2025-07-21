@@ -1687,33 +1687,25 @@ Spring Framework 6.1 (included in Spring Boot 3.2+) introduced `JdbcClient`, a m
    }
    ```
 
-6. For the finder methods, `JdbcClient` provides clean row mapping. Implement `findById`:
+6. For the finder methods, `JdbcClient` provides automatic object mapping. Implement `findById`:
 
    ```java
    @Override
    public Optional<Officer> findById(Integer id) {
        return jdbcClient.sql("SELECT * FROM officers WHERE id = :id")
                .param("id", id)
-               .query((rs, rowNum) -> new Officer(
-                       rs.getInt("id"),
-                       Rank.valueOf(rs.getString("rank")),
-                       rs.getString("first_name"),
-                       rs.getString("last_name")))
+               .query(Officer.class)
                .optional();
    }
    ```
 
-7. Implement `findAll` using the same row mapper pattern:
+7. Implement `findAll` using automatic mapping:
 
    ```java
    @Override
    public List<Officer> findAll() {
        return jdbcClient.sql("SELECT * FROM officers")
-               .query((rs, rowNum) -> new Officer(
-                       rs.getInt("id"),
-                       Rank.valueOf(rs.getString("rank")),
-                       rs.getString("first_name"),
-                       rs.getString("last_name")))
+               .query(Officer.class)
                .list();
    }
    ```
@@ -1836,6 +1828,7 @@ The `JdbcClient` approach offers several benefits over `JdbcTemplate`:
 
 - **Fluent API**: More readable and chainable method calls
 - **Named Parameters**: Clearer parameter binding with `:paramName` syntax
+- **Automatic Object Mapping**: No need for manual row mappers - simply use `.query(YourClass.class)`
 - **Built-in Optional Support**: Methods like `optional()` and `single()` provide better null handling
 - **Consistent Design**: Follows the same patterns as other modern Spring clients
 - **Text Block Friendly**: Works seamlessly with Java 17+ text blocks for complex SQL
