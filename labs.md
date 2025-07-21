@@ -1635,15 +1635,19 @@ Spring Framework 6.1 (included in Spring Boot 3.2+) introduced `JdbcClient`, a m
 
 1. Create a new DAO implementation called `JdbcClientOfficerDAO` that implements the same `OfficerDAO` interface, but uses `JdbcClient` instead of `JdbcTemplate`.
 
-2. Add the `@Repository` annotation and inject `JdbcClient` into the constructor:
+2. Add the `@Repository` annotation and inject `JdbcClient` into the constructor. For insert operations, we'll use `SimpleJdbcInsert`:
 
    ```java
    @Repository
    public class JdbcClientOfficerDAO implements OfficerDAO {
        private final JdbcClient jdbcClient;
+       private final SimpleJdbcInsert insertOfficer;
 
        public JdbcClientOfficerDAO(JdbcClient jdbcClient) {
            this.jdbcClient = jdbcClient;
+           this.insertOfficer = new SimpleJdbcInsert(jdbcClient)
+                   .withTableName("officers")
+                   .usingGeneratedKeyColumns("id");
        }
 
        // ... methods to come
@@ -1710,28 +1714,23 @@ Spring Framework 6.1 (included in Spring Boot 3.2+) introduced `JdbcClient`, a m
    }
    ```
 
-8. For the `save` method, we'll use `JdbcClient` with a key holder to get the generated ID. First, add the required import and create a key holder:
+8. For the `save` method, we'll use `SimpleJdbcInsert` for clean insert operations:
 
    ```java
    @Override
    public Officer save(Officer officer) {
        if (officer.getId() == null) {
-           // Insert new officer
-           var keyHolder = new GeneratedKeyHolder();
-           jdbcClient.sql("""
-                   INSERT INTO officers (rank, first_name, last_name) 
-                   VALUES (:rank, :firstName, :lastName)
-                   """)
-                   .param("rank", officer.getRank().name())
-                   .param("firstName", officer.getFirstName())
-                   .param("lastName", officer.getLastName())
-                   .update(keyHolder);
-           
-           var newId = keyHolder.getKey().intValue();
+           // Insert new officer using SimpleJdbcInsert
+           Map<String, Object> parameters = Map.of(
+               "rank", officer.getRank().name(),
+               "first_name", officer.getFirstName(),
+               "last_name", officer.getLastName()
+           );
+           var newId = insertOfficer.executeAndReturnKey(parameters).intValue();
            return new Officer(newId, officer.getRank(), 
                    officer.getFirstName(), officer.getLastName());
        } else {
-           // Update existing officer
+           // Update existing officer using JdbcClient
            jdbcClient.sql("""
                    UPDATE officers 
                    SET rank = :rank, first_name = :firstName, last_name = :lastName 
@@ -1748,13 +1747,24 @@ Spring Framework 6.1 (included in Spring Boot 3.2+) introduced `JdbcClient`, a m
    ```
 
    > [!TIP]
+   > For even cleaner code, you can use `BeanPropertySqlParameterSource` which uses reflection to extract properties from the object:
+   > 
+   > ```java
+   > // Alternative approach using reflection
+   > var paramSource = new BeanPropertySqlParameterSource(officer);
+   > var newId = insertOfficer.executeAndReturnKey(paramSource).intValue();
+   > ```
+
+   > [!TIP]
    > Notice how `JdbcClient` allows us to use text blocks (Java 17+ feature) for multi-line SQL, making the code more readable. The named parameters (`:paramName`) are much cleaner than positional parameters (`?`).
 
 9. Add the necessary imports to your class:
 
    ```java
    import org.springframework.jdbc.core.simple.JdbcClient;
-   import org.springframework.jdbc.support.GeneratedKeyHolder;
+   import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+   import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+   import java.util.Map;
    ```
 
 10. Create a test class called `JdbcClientOfficerDAOTest` to verify the implementation. Use the same test patterns as the `JdbcTemplate` version, but with a different qualifier:
@@ -1830,6 +1840,8 @@ The `JdbcClient` approach offers several benefits over `JdbcTemplate`:
 - **Named Parameters**: Clearer parameter binding with `:paramName` syntax
 - **Automatic Object Mapping**: No need for manual row mappers - simply use `.query(YourClass.class)`
 - **Built-in Optional Support**: Methods like `optional()` and `single()` provide better null handling
+- **SimpleJdbcInsert Integration**: Clean insert operations with generated key handling
+- **Bean Property Mapping**: Automatic parameter extraction using reflection
 - **Consistent Design**: Follows the same patterns as other modern Spring clients
 - **Text Block Friendly**: Works seamlessly with Java 17+ text blocks for complex SQL
 
