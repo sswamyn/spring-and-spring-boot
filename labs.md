@@ -599,9 +599,8 @@ public interface AstroInterface {
 @Bean
 public AstroInterface astroInterface() {
     WebClient client = WebClient.create("http://api.open-notify.org/");
-    HttpServiceProxyFactory factory =
-                HttpServiceProxyFactory.builder(WebClientAdapter.forClient(client)).build();
-
+    WebClientAdapter adapter = WebClientAdapter.create(client);
+    HttpServiceProxyFactory factory = HttpServiceProxyFactory.builderFor(adapter).build();
     return factory.createClient(AstroInterface.class);
 }
 ```
