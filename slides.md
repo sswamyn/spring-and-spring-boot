@@ -538,6 +538,52 @@ public class JdbcClientOfficerDAO implements OfficerDAO {
 
 ---
 
+# SimpleJdbcInsert: Clean Insert Operations
+
+For database inserts with generated keys, `SimpleJdbcInsert` provides a cleaner API than `GeneratedKeyHolder`:
+
+```java
+@Repository
+public class JdbcOfficerDao implements OfficerDAO {
+    private final JdbcClient jdbcClient;
+    private final SimpleJdbcInsert insertOfficer;
+    
+    public JdbcOfficerDao(JdbcClient jdbcClient) {
+        this.jdbcClient = jdbcClient;
+        this.insertOfficer = new SimpleJdbcInsert(jdbcClient.getJdbcOperations())
+                .withTableName("officers")
+                .usingGeneratedKeyColumns("id");
+    }
+    
+    @Override
+    public Officer save(Officer officer) {
+        // Option 1: Explicit parameter mapping
+        Map<String, Object> parameters = Map.of(
+            "rank", officer.getRank().name(),
+            "first_name", officer.getFirstName(),
+            "last_name", officer.getLastName()
+        );
+        
+        // Option 2: Reflection-based mapping
+        var paramSource = new BeanPropertySqlParameterSource(officer);
+        
+        var newId = insertOfficer.executeAndReturnKey(parameters).intValue();
+        return new Officer(newId, officer.getRank(), officer.getFirstName(), officer.getLastName());
+    }
+}
+```
+
+<v-clicks>
+
+- **No SQL Required**: Table name and columns are specified programmatically
+- **Generated Keys**: Automatically handles ID generation
+- **Parameter Sources**: Use `Map` or `BeanPropertySqlParameterSource` for convenience
+- **Type Safety**: Cleaner than string-based `GeneratedKeyHolder` approach
+
+</v-clicks>
+
+---
+
 # Spring Data JPA: The Magic
 
 Spring Data JPA takes abstraction to the next level. You only need to define an interface.
