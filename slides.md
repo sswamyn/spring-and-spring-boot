@@ -538,47 +538,59 @@ public class JdbcClientOfficerDAO implements OfficerDAO {
 
 ---
 
-# SimpleJdbcInsert: Clean Insert Operations
+# SimpleJdbcInsert: Setup
 
-For database inserts with generated keys, `SimpleJdbcInsert` provides a cleaner API than `GeneratedKeyHolder`:
+For database inserts with generated keys, `SimpleJdbcInsert` provides a cleaner API:
 
 ```java
 @Repository
 public class JdbcOfficerDao implements OfficerDAO {
-    private final JdbcClient jdbcClient;
     private final SimpleJdbcInsert insertOfficer;
     
     public JdbcOfficerDao(JdbcClient jdbcClient) {
-        this.jdbcClient = jdbcClient;
         this.insertOfficer = new SimpleJdbcInsert(jdbcClient.getJdbcOperations())
                 .withTableName("officers")
                 .usingGeneratedKeyColumns("id");
-    }
-    
-    @Override
-    public Officer save(Officer officer) {
-        // Option 1: Explicit parameter mapping
-        Map<String, Object> parameters = Map.of(
-            "rank", officer.getRank().name(),
-            "first_name", officer.getFirstName(),
-            "last_name", officer.getLastName()
-        );
-        
-        // Option 2: Reflection-based mapping
-        var paramSource = new BeanPropertySqlParameterSource(officer);
-        
-        var newId = insertOfficer.executeAndReturnKey(parameters).intValue();
-        return new Officer(newId, officer.getRank(), officer.getFirstName(), officer.getLastName());
     }
 }
 ```
 
 <v-clicks>
 
-- **No SQL Required**: Table name and columns are specified programmatically
+- **No SQL Required**: Table and columns specified programmatically
 - **Generated Keys**: Automatically handles ID generation
-- **Parameter Sources**: Use `Map` or `BeanPropertySqlParameterSource` for convenience
-- **Type Safety**: Cleaner than string-based `GeneratedKeyHolder` approach
+- **Fluent Configuration**: Chain methods for setup
+
+</v-clicks>
+
+---
+
+# SimpleJdbcInsert: Usage
+
+Using the configured `SimpleJdbcInsert` for database operations:
+
+```java
+@Override
+public Officer save(Officer officer) {
+    // Option 1: Explicit parameter mapping
+    Map<String, Object> parameters = Map.of(
+        "rank", officer.getRank().name(),
+        "first_name", officer.getFirstName(),
+        "last_name", officer.getLastName()
+    );
+    
+    // Option 2: Reflection-based mapping
+    var paramSource = new BeanPropertySqlParameterSource(officer);
+    
+    var newId = insertOfficer.executeAndReturnKey(parameters).intValue();
+    return new Officer(newId, officer.getRank(), officer.getFirstName(), officer.getLastName());
+}
+```
+
+<v-clicks>
+
+- **Parameter Sources**: Use `Map` or `BeanPropertySqlParameterSource`
+- **Type Safety**: Cleaner than `GeneratedKeyHolder` approach
 
 </v-clicks>
 
