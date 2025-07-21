@@ -521,19 +521,18 @@ public class JdbcClientOfficerDAO implements OfficerDAO {
     @Override
     public Optional<Officer> findById(Integer id) {
         return jdbcClient.sql("SELECT * FROM officers WHERE id = :id")
-                .param("id", id) // Named parameter
-                .query(this::mapRowToOfficer) // RowMapper
-                .optional(); // Returns Optional<Officer>
+                .param("id", id)
+                .query(Officer.class) // Automatic object mapping
+                .optional();
     }
-    
-    // ...
 }
 ```
 <v-clicks>
 
-- **Fluent API**: `sql().param().query().optional()` is readable and clear.
-- **Named Parameters**: `:id` is less error-prone than `?`.
-- **Built-in `optional()`**: Directly returns an `Optional`, simplifying code that handles "not found" cases.
+- **Fluent API**: Chain methods for readable code
+- **Named Parameters**: `:id` is less error-prone than `?`
+- **Automatic Mapping**: `.query(Officer.class)` - no row mappers!
+- **Built-in `optional()`**: Returns `Optional<Officer>` directly
 
 </v-clicks>
 
