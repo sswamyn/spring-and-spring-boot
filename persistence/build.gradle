@@ -8,7 +8,9 @@ group = 'com.kousenit'
 version = '1.0'
 
 java {
-    sourceCompatibility = '17'
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
 
 repositories {
