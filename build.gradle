@@ -32,3 +32,8 @@ subprojects {
         useJUnitPlatform()
     }
 }
+
+wrapper {
+    gradleVersion = '8.14.2'
+    distributionType = Wrapper.DistributionType.BIN
+}
