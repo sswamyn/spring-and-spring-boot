@@ -1,0 +1,6 @@
+rootProject.name = 'spring-and-spring-boot'
+
+include 'demo'
+include 'restclient' 
+include 'persistence'
+include 'shopping'

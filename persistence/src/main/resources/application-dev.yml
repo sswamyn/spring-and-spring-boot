@@ -21,6 +21,7 @@ logging:
 # Development specific settings
 app:
   description: "Development environment with H2 in-memory database"
+  environment: dev
   features:
     h2-console: true
     sql-logging: true

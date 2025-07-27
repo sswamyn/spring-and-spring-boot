@@ -26,6 +26,7 @@ logging:
 # Production specific settings
 app:
   description: "Production environment with PostgreSQL database"
+  environment: prod
   features:
     h2-console: false
     sql-logging: false

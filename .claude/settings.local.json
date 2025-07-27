@@ -18,7 +18,9 @@
       "mcp__docker-mcp__resolve-library-id",
       "mcp__docker-mcp__get-library-docs",
       "Bash(npx slidev export:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(./gradlew sonar:*)",
+      "Bash(./gradlew:*)"
     ],
     "deny": []
   }

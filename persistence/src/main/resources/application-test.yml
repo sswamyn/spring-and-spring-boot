@@ -6,9 +6,12 @@ spring:
     password: 
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: none  # Let SQL scripts handle schema creation
     database-platform: org.hibernate.dialect.H2Dialect
     show-sql: false  # Reduce noise in tests
+  sql:
+    init:
+      mode: always  # Ensure SQL scripts run
   h2:
     console:
       enabled: false  # Not needed in tests
@@ -22,6 +25,7 @@ logging:
 # Test specific settings
 app:
   description: "Test environment with H2 in-memory database"
+  environment: test
   features:
     h2-console: false
     sql-logging: false
