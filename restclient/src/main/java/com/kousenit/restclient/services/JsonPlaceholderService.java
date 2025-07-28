@@ -82,7 +82,7 @@ public class JsonPlaceholderService {
                 .uri("/users/{userId}/posts", userId)
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
-                .body(new ParameterizedTypeReference<List<Post>>() {});
+                .body(new ParameterizedTypeReference<>() {});
     }
 
     // Asynchronous methods using WebClient

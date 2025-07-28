@@ -711,7 +711,7 @@ This exercise introduces Spring Boot's modern `RestClient` for consuming externa
                    .uri("/users/{userId}/posts", userId)
                    .accept(MediaType.APPLICATION_JSON)
                    .retrieve()
-                   .body(new ParameterizedTypeReference<List<Post>>() {});
+                   .body(new ParameterizedTypeReference<>() {});
        }
 
        // Create a new post
@@ -1635,7 +1635,7 @@ Spring Framework 6.1 (included in Spring Boot 3.2+) introduced `JdbcClient`, a m
 
 1. Create a new DAO implementation called `JdbcClientOfficerDAO` that implements the same `OfficerDAO` interface, but uses `JdbcClient` instead of `JdbcTemplate`.
 
-2. Add the `@Repository` annotation and inject `JdbcClient` into the constructor. For insert operations, we'll use `SimpleJdbcInsert`:
+2. Add the `@Repository` annotation and inject both `DataSource` and `JdbcClient` into the constructor. For insert operations, we'll use `SimpleJdbcInsert`:
 
    ```java
    @Repository
@@ -1643,9 +1643,10 @@ Spring Framework 6.1 (included in Spring Boot 3.2+) introduced `JdbcClient`, a m
        private final JdbcClient jdbcClient;
        private final SimpleJdbcInsert insertOfficer;
 
-       public JdbcClientOfficerDAO(JdbcClient jdbcClient) {
+       @Autowired
+       public JdbcClientOfficerDAO(DataSource dataSource, JdbcClient jdbcClient) {
            this.jdbcClient = jdbcClient;
-           this.insertOfficer = new SimpleJdbcInsert(jdbcClient)
+           this.insertOfficer = new SimpleJdbcInsert(dataSource)
                    .withTableName("officers")
                    .usingGeneratedKeyColumns("id");
        }
@@ -1764,6 +1765,7 @@ Spring Framework 6.1 (included in Spring Boot 3.2+) introduced `JdbcClient`, a m
    import org.springframework.jdbc.core.simple.JdbcClient;
    import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
    import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
+   import javax.sql.DataSource;
    import java.util.Map;
    ```
 

@@ -854,7 +854,7 @@ public class Product {
     @Column(length = 500)
     private String description;
     
-    @Min(value = 0, message = "Quantity cannot be negative")
+    @PositiveOrZero(message = "Quantity must be greater than or equal to zero")
     @NotNull(message = "Quantity is required")
     @Column(nullable = false)
     private Integer quantity;
@@ -1043,7 +1043,7 @@ class ProductValidationTest {
         
         assertThat(violations).hasSize(1);
         assertThat(violations.iterator().next().getMessage())
-            .isEqualTo("Quantity cannot be negative");
+            .isEqualTo("Quantity must be greater than or equal to zero");
     }
     
     @Test
@@ -1439,7 +1439,7 @@ public record ProductRequest(
     @Size(max = 500, message = "Description cannot exceed 500 characters")
     String description,
     
-    @Min(value = 0, message = "Quantity cannot be negative")
+    @PositiveOrZero(message = "Quantity must be greater than or equal to zero")
     @NotNull(message = "Quantity is required")
     Integer quantity,
     
@@ -1494,12 +1494,12 @@ Create `src/main/java/com/kousenit/shopping/dto/StockUpdateRequest.java`:
 ```java
 package com.kousenit.shopping.dto;
 
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.NotNull;
 
 public record StockUpdateRequest(
     @NotNull(message = "Quantity is required")
-    @Min(value = 0, message = "Quantity cannot be negative")
+    @PositiveOrZero(message = "Quantity must be greater than or equal to zero")
     Integer quantity
 ) {}
 ```
@@ -1644,7 +1644,7 @@ public class ProductService {
         Product product = getProductByIdOrThrow(productId);
         
         if (quantity < 0) {
-            throw new ProductValidationException("quantity", quantity, "Quantity cannot be negative");
+            throw new ProductValidationException("quantity", quantity, "Quantity must be greater than or equal to zero");
         }
         
         product.setQuantity(quantity);
@@ -2348,7 +2348,7 @@ public record ProductRequest(
     @Size(max = 500, message = "Description cannot exceed 500 characters")
     String description,
     
-    @Min(value = 0, message = "Quantity cannot be negative")
+    @PositiveOrZero(message = "Quantity must be greater than or equal to zero")
     @NotNull(message = "Quantity is required")
     Integer quantity,
     
@@ -2403,12 +2403,12 @@ Create `src/main/java/com/kousenit/shopping/dto/StockUpdateRequest.java`:
 ```java
 package com.kousenit.shopping.dto;
 
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.NotNull;
 
 public record StockUpdateRequest(
     @NotNull(message = "Quantity is required")
-    @Min(value = 0, message = "Quantity cannot be negative")
+    @PositiveOrZero(message = "Quantity must be greater than or equal to zero")
     Integer quantity
 ) {}
 ```

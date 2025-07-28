@@ -38,7 +38,7 @@ public class Product {
     @Column(length = 500)
     private String description;
     
-    @Min(value = 0, message = "Quantity cannot be negative")
+    @PositiveOrZero(message = "Quantity must be greater than or equal to zero")
     @NotNull(message = "Quantity is required")
     @Column(nullable = false)
     private Integer quantity;
